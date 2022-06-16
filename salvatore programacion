@@ -1,0 +1,251 @@
+#include <RTClib.h>
+
+#include <Wire.h>
+
+
+RTC_DS1307 rtc;
+
+
+#include <DHT.h>
+#include <MQUnifiedsensor.h>
+#include <LiquidCrystal_I2C.h>
+
+#include <Wire.h>
+
+//definicion del sensor MQ135
+#define placa "Arduino uno"
+#define Voltage_Resolution 5
+#define pin A0 
+#define type "MQ-135" //MQ135
+#define ADC_Bit_Resolution 10 
+#define RatioMQ135CleanAir 3.6//RS / R0 = 3.6 ppm 
+MQUnifiedsensor MQ135(placa, Voltage_Resolution, ADC_Bit_Resolution, pin, type);
+
+//definicion DHT
+#define DHTPIN 2     // Pin donde está conectado el sensor
+#define DHTTYPE DHT22   // Sensor DHT22
+DHT dht(DHTPIN, DHTTYPE);
+
+//definicion LCD
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+
+char diasdelasemana[7][12] = {"D", "L", "K", "M", "J", "V", "S"};
+
+void setup() {
+ 
+  Serial.begin(9600);
+
+  //set del rtc y pa saber< si eesta UWU
+  
+  rtc.begin();
+    //rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));//se auto actualiza con el reloj de la computadora
+    //rtc.adjust(DateTime(año, mes, dia, hora, 0, 0));// para poner la hora de forma manual
+
+    rtc.adjust(DateTime(2022, 5, 24, 2, 32, 0));// para poner la hora de forma manual
+  
+
+  //seteo de lcd
+  lcd.clear();
+  lcd.init();
+  lcd.backlight();
+
+  dht.begin();//inicion dht
+
+  //MQ 135 seteado espacio
+  MQ135.setRegressionMethod(1); //_PPM =  a*ratio^b
+  MQ135.init();
+  Serial.print("calibrando");
+  float calcR0 = 0;
+  for (int i = 1; i <= 10; i ++)
+  {
+    MQ135.update(); // actualizada datos leara el voltaje
+    calcR0 += MQ135.calibrate(RatioMQ135CleanAir);
+    Serial.print(".");
+  }
+  MQ135.setR0(calcR0 / 10);
+  Serial.println("  bieeen!.");
+  if (isinf(calcR0)) {
+    Serial.println("Warning: circuito abierto");
+    while (1);
+  }
+  if (calcR0 == 0) {
+    Serial.println("Warning: pin analogico en corto");
+    while (1);
+  }
+  //calibracion final
+
+
+  //pines de los botones de eleccion
+
+  pinMode(4, INPUT_PULLUP);
+  pinMode(5, INPUT_PULLUP);
+  pinMode(6, INPUT_PULLUP);
+  pinMode(7, INPUT_PULLUP);
+
+}
+
+void loop() {
+   lcd.setCursor(0, 1);
+    
+      lcd.print("menu");
+     delay(500);
+
+
+
+  switch (digitalRead(4)) {
+    case LOW:
+ 
+      float h = dht.readHumidity(); //Leemos la Humedad
+      float t = dht.readTemperature(); //Leemos la temperatura en grados Celsius
+      float hic = dht.computeHeatIndex(t, h, false);
+      lcd.setCursor(0, 1);
+      lcd.clear();
+      lcd.print(h);
+      lcd.setCursor(0, 1);
+      lcd.print("Humedad");
+      delay(1000);
+      lcd.setCursor(0, 1);
+      lcd.clear();
+      lcd.print(t);
+      lcd.setCursor(0, 1);
+      lcd.print("temperatura C");
+      delay(1000);
+      lcd.setCursor(0, 1);
+      lcd.clear();
+      lcd.print(hic);
+      lcd.setCursor(0, 1);
+      lcd.print("% index calor");
+      delay(1000);
+
+
+  }
+  switch (digitalRead(5)) {
+    case LOW:
+  
+      lcd.clear();
+      MQ135.update();
+      MQ135.setA(44.947); MQ135.setB(-3.445); // configuracion de ecuacion para Toluene concentration
+      MQ135.update();
+      float Toluene = MQ135.readSensor(); //sensor leara Concentración de PPM utilizando el modelo y los valores a y b establecidos antes o en la configuración
+      lcd.setCursor(0, 1);
+      lcd.clear();
+      lcd.setCursor(1, 1);
+      lcd.print(Toluene);
+      lcd.setCursor(0, 0);
+      lcd.print("PPM tolueno ");
+      delay(5000);
+      MQ135.update();
+      MQ135.setA(34.668); MQ135.setB(-3.369); // determinacion valor de ecuacuion para Acetone concentration
+      MQ135.update();
+      float Acetone = MQ135.readSensor(); // sensor leara Concentración de PPM utilizando el modelo y los valores a y b establecidos antes o en la configuración
+      lcd.clear();
+      lcd.setCursor(1, 1);
+      lcd.print(Acetone);
+      lcd.setCursor(0, 0);
+      lcd.print("PPM acetona");
+      delay(5000);
+MQ135.update();
+      MQ135.setA(102.2 ); MQ135.setB(-2.473); // confgura ecuacion para obetener NH4 concentration
+      MQ135.update();
+      float NH4 = MQ135.readSensor(); // sensor leara Concentración de PPM utilizando el modelo y los valores a y b establecidos antes o en la configuración
+      lcd.clear();
+      lcd.setCursor(1, 1);
+      lcd.print(NH4);
+      lcd.setCursor(0, 0);
+      lcd.print("PPM NH4");
+      delay(5000);
+
+
+  }
+  switch (digitalRead(6)) {
+    case LOW:
+      MQ135.update();
+      lcd.clear();
+      MQ135.setA(605.18); MQ135.setB(-3.937); //co concentyracion valore enla ecuacion
+      MQ135.update();
+      float CO = MQ135.readSensor(); //sensor leara Concentración de PPM utilizando el modelo y los valores a y b establecidos antes o en la configuración
+      lcd.setCursor(1, 1);
+      lcd.print(CO);
+      lcd.setCursor(0, 0);
+      lcd.print("PPM CO ");
+      delay(5000);
+      MQ135.update();
+      MQ135.setA(77.255); MQ135.setB(-3.18); // configuracion de ecuacion Alcohol concentration
+      MQ135.update();
+      float Alcohol = MQ135.readSensor(); // sensor leara Concentración de PPM utilizando el modelo y los valores a y b establecidos antes o en la configuración
+      lcd.clear();
+      lcd.setCursor(1, 1);
+      lcd.print(Alcohol);
+      lcd.setCursor(0, 0);
+      lcd.print("PPM alcohol");
+      delay(5000);
+  
+      MQ135.update();
+      MQ135.setA(110.47); MQ135.setB(-2.862); // configuracion ecuacion CO2 concentration
+      MQ135.update();
+      float CO2 = MQ135.readSensor(); // sensor leara Concentración de PPM utilizando el modelo y los valores a y b establecidos antes o en la configuración
+      lcd.clear();
+      lcd.setCursor(1, 1);
+      lcd.print(CO2);
+      lcd.setCursor(0, 0);
+      lcd.print("PPM CO2");
+      delay(5000);
+
+  }
+
+  switch (digitalRead(7)) {
+    case LOW:
+     rtc.begin();
+ 
+    DateTime now = rtc.now();
+    lcd.setCursor(0, 1);
+    lcd.print("TIME");
+    lcd.print(" ");
+    lcd.print(now.hour());
+    lcd.print(':');
+    lcd.print(now.minute());
+    
+lcd.print("  ");
+
+    lcd.setCursor(0, 0);
+    lcd.print("DATE");
+    lcd.print(" ");
+    lcd.print(diasdelasemana [now.dayOfTheWeek()]);
+    lcd.print(" ");
+    lcd.print(now.day());
+    lcd.print('/');
+    lcd.print(now.month());
+    lcd.print('/');
+    lcd.print(now.year());
+    lcd.print("  "); 
+delay(500);
+
+    lcd.setCursor(0, 1);
+    lcd.print("TIME");
+    lcd.print(" ");
+    lcd.print(now.hour());
+    lcd.print(':');
+    lcd.print(now.minute());
+    
+lcd.print("  ");
+
+    lcd.setCursor(0, 0);
+    lcd.print("DATE");
+    lcd.print(" ");
+    lcd.print(diasdelasemana [now.dayOfTheWeek()]);
+    lcd.print(" ");
+    lcd.print(now.day());
+    lcd.print('/');
+    lcd.print(now.month());
+    lcd.print('/');
+    lcd.print(now.year());
+    lcd.print("  "); 
+delay(500);
+  }
+  lcd.clear();
+
+
+
+
+}
